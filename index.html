@@ -1,0 +1,1622 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamForge - Cloud IPTV Middleware</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: {
+                            850: '#1f2937',
+                            900: '#111827',
+                            950: '#030712',
+                        },
+                        brand: {
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar for large datasets */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+        .no-select { user-select: none; }
+        .selected-row { background-color: rgba(59, 130, 246, 0.2) !important; }
+        
+        /* Spinner */
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-200 h-screen flex overflow-hidden font-sans">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col z-20 shrink-0">
+        <div class="p-4 border-b border-gray-800 flex items-center space-x-3">
+            <i class="fa-solid fa-satellite-dish text-brand-500 text-2xl"></i>
+            <span class="text-xl font-bold tracking-wider text-white">StreamForge</span>
+        </div>
+        <nav class="flex-1 overflow-y-auto py-4 space-y-1">
+            <button onclick="App.navigate('dashboard')" class="nav-btn w-full flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors" data-view="dashboard">
+                <i class="fa-solid fa-chart-line w-6"></i> Dashboard
+            </button>
+            <button onclick="App.navigate('import')" class="nav-btn w-full flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors" data-view="import">
+                <i class="fa-solid fa-cloud-arrow-up w-6"></i> Import Playlist
+            </button>
+            <div class="px-6 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider mt-4">Edit & Manage</div>
+            <button onclick="App.navigate('basic_editor')" class="nav-btn w-full flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors" data-view="basic_editor">
+                <i class="fa-solid fa-list-ul w-6"></i> Edit Channels
+            </button>
+            <button onclick="App.navigate('category_editor')" class="nav-btn w-full flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors" data-view="category_editor">
+                <i class="fa-solid fa-folder-tree w-6"></i> Edit Categories
+            </button>
+            <button onclick="App.navigate('advanced_editor')" class="nav-btn w-full flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors" data-view="advanced_editor">
+                <i class="fa-solid fa-wand-magic-sparkles w-6"></i> Bulk Edit
+            </button>
+            <button onclick="App.navigate('epg_editor')" class="nav-btn w-full flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors" data-view="epg_editor">
+                <i class="fa-solid fa-tv w-6"></i> Manage EPG
+            </button>
+            <button onclick="App.navigate('export')" class="nav-btn w-full flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors" data-view="export">
+                <i class="fa-solid fa-download w-6"></i> Export Playlist
+            </button>
+        </nav>
+        <div class="p-4 border-t border-gray-800 text-xs text-gray-500 text-center">
+            Database: IndexedDB<br>Storage: Local Node
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col relative overflow-hidden bg-gray-950">
+        
+        <!-- Topbar -->
+        <header class="h-16 border-b border-gray-800 flex items-center justify-between px-6 bg-gray-900/50 backdrop-blur-sm z-10 shrink-0">
+            <h2 id="pageTitle" class="text-lg font-semibold text-white">Dashboard</h2>
+            <div class="flex items-center space-x-4">
+                <div id="statusIndicator" class="flex items-center text-xs text-green-400 bg-green-400/10 px-3 py-1 rounded-full border border-green-400/20">
+                    <div class="w-2 h-2 rounded-full bg-green-400 mr-2 animate-pulse"></div>
+                    System Ready
+                </div>
+            </div>
+        </header>
+
+        <!-- Views Container -->
+        <div id="views" class="flex-1 overflow-y-auto p-6 relative">
+            
+            <div id="view_dashboard" class="view-section block space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-gray-900 border border-gray-800 p-6 rounded-xl shadow-lg">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm text-gray-400 font-medium">Total Streams</p>
+                                <h3 id="dash_total_streams" class="text-3xl font-bold text-white mt-1">0</h3>
+                            </div>
+                            <div class="p-3 bg-brand-500/20 rounded-lg"><i class="fa-solid fa-play text-brand-500"></i></div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 p-6 rounded-xl shadow-lg">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm text-gray-400 font-medium">Categories</p>
+                                <h3 id="dash_total_cats" class="text-3xl font-bold text-white mt-1">0</h3>
+                            </div>
+                            <div class="p-3 bg-purple-500/20 rounded-lg"><i class="fa-solid fa-folder text-purple-500"></i></div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 p-6 rounded-xl shadow-lg">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm text-gray-400 font-medium">EPG Sources</p>
+                                <h3 id="dash_total_epg" class="text-3xl font-bold text-white mt-1">0</h3>
+                            </div>
+                            <div class="p-3 bg-green-500/20 rounded-lg"><i class="fa-solid fa-tv text-green-500"></i></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-gray-900 border border-gray-800 rounded-xl shadow-lg p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4">System Architecture Notice</h3>
+                    <p class="text-sm text-gray-400 leading-relaxed mb-4">
+                        This middleware executes entirely within your browser utilizing <span class="text-brand-500 font-mono">IndexedDB</span> for high-performance, persistent data storage. It is engineered to handle massive M3U or Xtream payloads without transmitting your private upstream credentials to an external server.
+                    </p>
+                    <button onclick="App.DB.clearAll()" class="px-4 py-2 bg-red-600/10 text-red-500 border border-red-600/30 rounded-lg hover:bg-red-600/20 transition-colors text-sm font-medium">
+                        <i class="fa-solid fa-trash mr-2"></i> Wipe Local Database
+                    </button>
+                </div>
+            </div>
+
+            <div id="view_import" class="view-section hidden space-y-6 max-w-4xl mx-auto">
+                <div class="flex space-x-2 bg-gray-900 p-1 rounded-lg border border-gray-800 w-max mb-6">
+                    <button onclick="App.UI.switchImportTab('m3u')" id="tab_btn_m3u" class="px-4 py-2 text-sm font-medium rounded-md bg-gray-800 text-white shadow">M3U Playlist</button>
+                    <button onclick="App.UI.switchImportTab('xtream')" id="tab_btn_xtream" class="px-4 py-2 text-sm font-medium rounded-md text-gray-400 hover:text-white">Xtream Codes API</button>
+                </div>
+
+                <!-- M3U Import -->
+                <div id="import_m3u" class="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg">
+                    <h3 class="text-lg font-semibold text-white mb-2">Import M3U Playlist</h3>
+                    <p class="text-sm text-gray-400 mb-6">Upload a local .m3u file or paste a provider URL. The inline worker will parse the metadata structure automatically.</p>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">Local File</label>
+                            <input type="file" id="m3u_file" accept=".m3u,.m3u8" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-500 file:text-white hover:file:bg-brand-600 border border-gray-700 rounded-lg bg-gray-850">
+                        </div>
+                        <div class="flex items-center my-4">
+                            <div class="flex-grow border-t border-gray-700"></div>
+                            <span class="mx-4 text-xs text-gray-500 uppercase">OR</span>
+                            <div class="flex-grow border-t border-gray-700"></div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">Provider URL</label>
+                            <input type="text" id="m3u_url" placeholder="http://provider.com/get.php?username=..." class="w-full bg-gray-850 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-brand-500">
+                        </div>
+                        
+                        <div class="pt-4 flex items-center space-x-4">
+                            <label class="flex items-center space-x-2 text-sm text-gray-300">
+                                <input type="checkbox" id="m3u_ignore_nums" checked class="rounded border-gray-700 text-brand-500 bg-gray-850 focus:ring-brand-500">
+                                <span>Ignore provider channel numbering</span>
+                            </label>
+                        </div>
+                        
+                        <button onclick="App.Ingest.processM3U()" class="w-full mt-4 bg-brand-600 hover:bg-brand-500 text-white font-medium py-3 px-4 rounded-lg transition-colors flex justify-center items-center">
+                            <i class="fa-solid fa-bolt mr-2"></i> Import M3U
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Xtream Import -->
+                <div id="import_xtream" class="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg hidden">
+                    <h3 class="text-lg font-semibold text-white mb-2">Xtream Codes Integration</h3>
+                    <p class="text-sm text-gray-400 mb-4">Connect directly to an Xtream API. Note: Due to browser security constraints, the target server must support CORS, or you must use a local CORS proxy.</p>
+                    
+                    <div class="space-y-4">
+                        <div class="bg-amber-900/20 border border-amber-800/50 p-4 rounded-lg">
+                            <label class="block text-sm font-medium text-amber-400 mb-1"><i class="fa-solid fa-unlock mr-2"></i>CORS Bypass Required</label>
+                            <p class="text-xs text-gray-400">To connect directly from your browser, you must install a browser extension like <strong>"Allow CORS"</strong> and enable it. This allows your browser to act exactly like a native IPTV player.</p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">Server URL</label>
+                            <input type="text" id="xc_url" placeholder="http://xtream-server.com:8080" class="w-full bg-gray-850 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-brand-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-400 mb-1">Username</label>
+                                <input type="text" id="xc_user" class="w-full bg-gray-850 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-brand-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-400 mb-1">Password</label>
+                                <input type="password" id="xc_pass" class="w-full bg-gray-850 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-brand-500">
+                            </div>
+                        </div>
+                        <button onclick="App.Ingest.processXtream()" class="w-full mt-4 bg-brand-600 hover:bg-brand-500 text-white font-medium py-3 px-4 rounded-lg transition-colors flex justify-center items-center">
+                            <i class="fa-solid fa-network-wired mr-2"></i> Authenticate & Fetch Categories
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Basic Editor -->
+            <div id="view_basic_editor" class="view-section hidden h-full flex flex-col">
+                <div class="bg-gray-900 p-4 border border-gray-800 rounded-t-xl flex justify-between items-center shrink-0">
+                    <div class="flex space-x-3 items-center">
+                        <select id="editor_category_filter" onchange="App.Editor.renderTable()" class="bg-gray-850 border border-gray-700 text-sm rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500 w-64">
+                            <option value="all">All Categories</option>
+                        </select>
+                        <input type="text" id="editor_search" onkeyup="App.Editor.debounceSearch()" placeholder="Search channels..." class="bg-gray-850 border border-gray-700 text-sm rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500 w-64">
+                    </div>
+                    <div class="flex space-x-2 text-sm">
+                        <span class="px-3 py-2 bg-gray-800 rounded-lg text-gray-400 border border-gray-700">Use Shift+Click for bulk selection</span>
+                        <button onclick="App.Editor.deleteSelected()" class="bg-red-600/20 text-red-500 hover:bg-red-600/40 border border-red-600/30 px-4 py-2 rounded-lg transition-colors font-medium">Delete Selected</button>
+                    </div>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto bg-gray-900 border-x border-b border-gray-800 rounded-b-xl relative" id="table_container">
+                    <table class="w-full text-left text-sm text-gray-400 no-select">
+                        <thead class="text-xs text-gray-500 uppercase bg-gray-850 sticky top-0 z-10">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 w-10">
+                                    <input type="checkbox" id="selectAllCheckbox" onclick="App.Editor.toggleSelectAll()" class="rounded border-gray-700 text-brand-500 bg-gray-800 focus:ring-brand-500">
+                                </th>
+                                <th scope="col" class="px-4 py-3 w-20">Logo</th>
+                                <th scope="col" class="px-4 py-3">Channel Name</th>
+                                <th scope="col" class="px-4 py-3 w-64">Category</th>
+                                <th scope="col" class="px-4 py-3 w-24 text-center">Sync Name</th>
+                            </tr>
+                        </thead>
+                        <tbody id="editor_tbody" class="divide-y divide-gray-800">
+                            <!-- Rows rendered via JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="bg-gray-900 border border-gray-800 mt-2 p-3 rounded-xl flex justify-between items-center text-sm shrink-0">
+                    <div class="text-gray-400" id="editor_pagination_info">Showing 0 to 0 of 0 entries</div>
+                    <div class="flex space-x-2">
+                        <button onclick="App.Editor.prevPage()" class="px-3 py-1 bg-gray-800 hover:bg-gray-700 rounded border border-gray-700">Prev</button>
+                        <button onclick="App.Editor.nextPage()" class="px-3 py-1 bg-gray-800 hover:bg-gray-700 rounded border border-gray-700">Next</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category Editor -->
+            <div id="view_category_editor" class="view-section hidden max-w-5xl mx-auto space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg">
+                        <h3 class="text-lg font-semibold text-white mb-4">Edit Categories</h3>
+                        <div class="flex mb-4">
+                            <input type="text" id="new_cat_name" placeholder="New Category Name" class="flex-1 bg-gray-850 border border-gray-700 rounded-l-lg px-4 py-2 text-white focus:outline-none focus:border-brand-500 text-sm">
+                            <button onclick="App.CategoryEngine.createCategory()" class="bg-brand-600 hover:bg-brand-500 text-white px-4 py-2 rounded-r-lg text-sm font-medium transition-colors">Add</button>
+                        </div>
+                        <div class="max-h-[500px] overflow-y-auto pr-2" id="category_list_container">
+                            <!-- List populated via JS -->
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg h-fit">
+                        <h3 class="text-lg font-semibold text-white mb-2">Category Merging</h3>
+                        <p class="text-xs text-gray-400 mb-4">Move all streams from a source category into a target category, then delete the source.</p>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-400 mb-1">Source Category (To be emptied)</label>
+                                <select id="merge_source_cat" class="w-full bg-gray-850 border border-gray-700 text-sm rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500"></select>
+                            </div>
+                            <div class="text-center text-gray-600"><i class="fa-solid fa-arrow-down"></i></div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-400 mb-1">Target Category (Merge Into)</label>
+                                <select id="merge_target_cat" class="w-full bg-gray-850 border border-gray-700 text-sm rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500"></select>
+                            </div>
+                            <button onclick="App.CategoryEngine.executeMerge()" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-medium py-2 px-4 rounded-lg transition-colors flex justify-center items-center text-sm">
+                                <i class="fa-solid fa-code-merge mr-2"></i> Execute Merge
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Advanced Editor (Bulk) -->
+            <div id="view_advanced_editor" class="view-section hidden max-w-4xl mx-auto space-y-6">
+                <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg">
+                    <h3 class="text-lg font-semibold text-white mb-2">Bulk Edit Tools</h3>
+                    <p class="text-sm text-gray-400 mb-6">Perform macro-level string manipulation on your entire stream dataset to clean provider artifacts.</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Regex Auto Cleaner -->
+                        <div class="border border-gray-800 rounded-lg p-4 bg-gray-850">
+                            <h4 class="font-medium text-white mb-2 text-sm"><i class="fa-solid fa-broom text-brand-500 mr-2"></i> Automatic Name Optimizer</h4>
+                            <p class="text-xs text-gray-400 mb-4">Strips common artifacts like [UK], US:, country prefixes, and normalizes spacing.</p>
+                            <button onclick="App.Advanced.autoOptimize()" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm">
+                                Run Auto-Cleaner
+                            </button>
+                        </div>
+
+                        <!-- Deduplication -->
+                        <div class="border border-gray-800 rounded-lg p-4 bg-gray-850">
+                            <h4 class="font-medium text-white mb-2 text-sm"><i class="fa-solid fa-clone text-red-500 mr-2"></i> Remove Duplicates</h4>
+                            <p class="text-xs text-gray-400 mb-4">Scans stream URLs to identify and drop identical redundant streams, keeping the first instance.</p>
+                            <button onclick="App.Advanced.deduplicate()" class="w-full bg-red-600/20 text-red-500 hover:bg-red-600/40 border border-red-600/30 font-medium py-2 px-4 rounded-lg transition-colors text-sm">
+                                Execute Deduplication
+                            </button>
+                        </div>
+
+                        <!-- Search & Replace -->
+                        <div class="border border-gray-800 rounded-lg p-4 bg-gray-850 col-span-1 md:col-span-2">
+                            <h4 class="font-medium text-white mb-2 text-sm"><i class="fa-solid fa-magnifying-glass-chart text-green-500 mr-2"></i> Bulk Search & Replace</h4>
+                            <div class="flex space-x-4 mb-2">
+                                <input type="text" id="adv_search_str" placeholder="Find String (e.g., HD)" class="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-brand-500">
+                                <input type="text" id="adv_replace_str" placeholder="Replace With (leave blank to remove)" class="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-brand-500">
+                            </div>
+                            <button onclick="App.Advanced.searchAndReplace()" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm mt-2">
+                                Execute Replacement
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EPG Editor -->
+            <div id="view_epg_editor" class="view-section hidden max-w-6xl mx-auto space-y-6">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    <!-- Add Source Column -->
+                    <div class="lg:col-span-1 space-y-6">
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg">
+                            <h3 class="text-lg font-semibold text-white mb-4">Add EPG Source</h3>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-400 mb-1">Source Name</label>
+                                    <input type="text" id="epg_source_name" placeholder="e.g., Main UK XMLTV" class="w-full bg-gray-850 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500 text-sm">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-400 mb-1">Source Type</label>
+                                    <select id="epg_source_type" onchange="App.EPG.toggleFields()" class="w-full bg-gray-850 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500 text-sm">
+                                        <option value="url">Standard XMLTV URL</option>
+                                        <option value="sheet">Custom Dynamic EPG (Google Sheets)</option>
+                                        <option value="dummy">Internal Dummy Generator</option>
+                                    </select>
+                                </div>
+
+                                <!-- Dynamic Fields -->
+                                <div id="epg_field_url" class="space-y-2">
+                                    <label class="block text-sm font-medium text-gray-400">XMLTV/GZ URL</label>
+                                    <input type="text" id="epg_input_url" placeholder="https://provider.com/epg.xml" class="w-full bg-gray-850 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500 text-sm">
+                                </div>
+
+                                <div id="epg_field_sheet" class="space-y-3 hidden">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-400 mb-1">Google Sheet CSV URL</label>
+                                        <input type="text" id="epg_input_sheet_url" placeholder="https://docs.google.com/.../pub?output=csv" class="w-full bg-gray-850 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500 text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-400 mb-1">Sheet / Tab Name (Optional Reference)</label>
+                                        <input type="text" id="epg_input_sheet_name" placeholder="e.g., Processed_EPG_Data" class="w-full bg-gray-850 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500 text-sm">
+                                        <p class="text-xs text-gray-500 mt-1">If you use a secondary sheet to acquire data, name it here for your records.</p>
+                                    </div>
+                                    <div class="bg-blue-900/20 border border-blue-800/50 rounded p-3 text-xs text-blue-300">
+                                        <p class="font-semibold mb-1">Format Guide (Columns A to F):</p>
+                                        <ul class="list-disc list-inside">
+                                            <li>A: Channel Name, B: Start Time</li>
+                                            <li>C: End Time, D: Title</li>
+                                            <li>E: Description, F: Photo URL</li>
+                                        </ul>
+                                        <a href="#" onclick="App.EPG.showSampleModal()" class="text-blue-400 hover:text-blue-200 underline mt-2 inline-block">View Detailed Sample Format</a>
+                                    </div>
+                                </div>
+
+                                <div id="epg_field_dummy" class="space-y-3 hidden">
+                                    <p class="text-xs text-gray-400 bg-gray-850 p-3 rounded border border-gray-700">
+                                        Generates EPG blocks for any channel with the "Sync Name" flag enabled. Useful for Live Events.
+                                    </p>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-400 mb-1">Block Duration (Hours)</label>
+                                        <input type="number" id="epg_input_dummy_duration" value="24" min="1" max="168" class="w-full bg-gray-850 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500 text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-400 mb-1">Default Program Image URL (Optional)</label>
+                                        <input type="text" id="epg_input_dummy_img" placeholder="https://domain.com/live-event-banner.jpg" class="w-full bg-gray-850 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500 text-sm">
+                                    </div>
+                                </div>
+
+                                <button onclick="App.EPG.addSource()" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm mt-4">
+                                    Add Source
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Manage Sources Column -->
+                    <div class="lg:col-span-2 space-y-6">
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg min-h-[400px]">
+                            <h3 class="text-lg font-semibold text-white mb-4">Active EPG Sources</h3>
+                            <div class="text-sm text-gray-400 mb-4">Standard URLs are appended to your M3U export header. Google Sheets and Dummy sources modify local data and require generating a custom XMLTV file upon export.</div>
+                            
+                            <div id="epg_source_list" class="space-y-3">
+                                <!-- EPG Sources Rendered Here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export View -->
+            <div id="view_export" class="view-section hidden max-w-4xl mx-auto space-y-6">
+                <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg text-center">
+                    <i class="fa-solid fa-cloud-arrow-down text-5xl text-brand-500 mb-4"></i>
+                    <h3 class="text-2xl font-bold text-white mb-2">Export Playlist</h3>
+                    <p class="text-sm text-gray-400 mb-6 max-w-xl mx-auto">Generate your final customized M3U payload. If you utilized Dynamic Sheets or Dummy generators, be sure to also download your custom XMLTV guide.</p>
+                    
+                    <div class="flex flex-col sm:flex-row justify-center items-center gap-4">
+                        <button onclick="App.Export.generateM3U()" class="w-full sm:w-auto bg-brand-600 hover:bg-brand-500 text-white font-bold py-4 px-8 rounded-xl transition-colors shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+                            <i class="fa-solid fa-list mr-2"></i> Download M3U File
+                        </button>
+                        <button onclick="App.Export.generateXMLTV()" class="w-full sm:w-auto bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 px-8 rounded-xl transition-colors shadow-[0_0_15px_rgba(147,51,234,0.4)]">
+                            <i class="fa-solid fa-code mr-2"></i> Download Custom XMLTV
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg">
+                    <h3 class="text-lg font-semibold text-white mb-4"><i class="fa-brands fa-google-drive mr-2 text-yellow-500"></i> Google Drive Hosting Instructions</h3>
+                    <ol class="list-decimal list-inside text-sm text-gray-400 space-y-3">
+                        <li>Download your <strong>playlist.m3u</strong> and (if applicable) <strong>guide.xml</strong> files using the buttons above.</li>
+                        <li>Upload both files to your Google Drive.</li>
+                        <li>Right-click each file in Drive, select <strong>"Share"</strong>, and change access to <strong>"Anyone with the link"</strong>.</li>
+                        <li>Copy the file link. It looks like: <code>https://drive.google.com/file/d/YOUR_FILE_ID/view?usp=sharing</code></li>
+                        <li>Convert the link to a direct download format for your media player apps: <br>
+                            <code class="block bg-gray-950 p-2 rounded mt-2 border border-gray-800 text-brand-400 break-all">https://drive.google.com/uc?export=download&id=YOUR_FILE_ID</code>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- Global Overlay/Loader -->
+        <div id="global_overlay" class="absolute inset-0 bg-gray-950/80 backdrop-blur-sm z-50 hidden flex-col items-center justify-center">
+            <div class="loader mb-4"></div>
+            <p id="overlay_text" class="text-lg font-medium text-white tracking-wide">Processing Data...</p>
+        </div>
+        
+        <!-- Sample EPG Modal -->
+        <div id="modal_sample_epg" class="absolute inset-0 bg-gray-950/90 backdrop-blur-sm z-50 hidden flex-col items-center justify-center p-4">
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 max-w-4xl w-full shadow-2xl relative">
+                <button onclick="document.getElementById('modal_sample_epg').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+                <h3 class="text-lg font-bold text-white mb-4">Google Sheet Format Guide (With Times & Photos)</h3>
+                <p class="text-sm text-gray-400 mb-4">To use a dynamic Google Sheet, ensure your columns match exactly as shown below. Time formats should be <code>YYYY-MM-DD HH:MM</code>. If you process data on "Sheet1", output the final clean data to "Sheet2" and publish "Sheet2" to the web as a CSV.</p>
+                
+                <div class="overflow-x-auto border border-gray-700 rounded mb-4">
+                    <table class="w-full text-left text-sm text-gray-300 min-w-max">
+                        <thead class="bg-gray-800 text-xs uppercase">
+                            <tr>
+                                <th class="px-3 py-2 border-r border-gray-700">A (Channel)</th>
+                                <th class="px-3 py-2 border-r border-gray-700">B (Start Time)</th>
+                                <th class="px-3 py-2 border-r border-gray-700">C (End Time)</th>
+                                <th class="px-3 py-2 border-r border-gray-700">D (Title)</th>
+                                <th class="px-3 py-2 border-r border-gray-700">E (Description)</th>
+                                <th class="px-3 py-2">F (Photo URL)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-700 bg-gray-850">
+                            <tr>
+                                <td class="px-3 py-2 border-r border-gray-700">Sky Sports Main</td>
+                                <td class="px-3 py-2 border-r border-gray-700 text-green-400 font-mono">2026-09-06 14:00</td>
+                                <td class="px-3 py-2 border-r border-gray-700 text-red-400 font-mono">2026-09-06 16:00</td>
+                                <td class="px-3 py-2 border-r border-gray-700">Arsenal vs Chelsea</td>
+                                <td class="px-3 py-2 border-r border-gray-700">Live from Emirates...</td>
+                                <td class="px-3 py-2 truncate max-w-[150px]">https://domain.com/soccer.jpg</td>
+                            </tr>
+                            <tr>
+                                <td class="px-3 py-2 border-r border-gray-700">HBO HD</td>
+                                <td class="px-3 py-2 border-r border-gray-700 text-green-400 font-mono">2026-09-06 20:00</td>
+                                <td class="px-3 py-2 border-r border-gray-700 text-red-400 font-mono">2026-09-06 21:00</td>
+                                <td class="px-3 py-2 border-r border-gray-700">Game of Thrones</td>
+                                <td class="px-3 py-2 border-r border-gray-700">Season 1 Episode 1</td>
+                                <td class="px-3 py-2 truncate max-w-[150px]">https://domain.com/got.png</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-xs text-brand-400 bg-brand-900/20 p-3 rounded border border-brand-800/50">
+                    <strong>To Publish:</strong> File > Share > Publish to web > Select your specific tab (e.g., "Processed_EPG_Data") > Select "Comma-separated values (.csv)" > Click Publish. Copy the generated link.
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-gray-800 border border-gray-700 text-white px-6 py-3 rounded-lg shadow-2xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center">
+        <i id="toast_icon" class="fa-solid mr-3"></i>
+        <span id="toast_msg" class="text-sm font-medium"></span>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        /**
+         * Core Application Architecture
+         * Uses Vanilla JS with modular structure to handle immense data in a single file constraint.
+         */
+        const App = {
+            state: {
+                currentView: 'dashboard',
+                streams: [], 
+                categories: [],
+                epgSources: [],
+                epgCache: [], // Array to hold multiple events per channel
+                editorSelection: new Set(),
+                lastSelectedRowIndex: null,
+                currentPage: 1,
+                itemsPerPage: 100,
+                filteredStreams: []
+            },
+
+            // --- Database Layer (IndexedDB Wrapper) ---
+            DB: {
+                dbName: 'StreamForgeDB',
+                version: 3,
+                db: null,
+
+                async init() {
+                    return new Promise((resolve, reject) => {
+                        const request = indexedDB.open(this.dbName, this.version);
+                        
+                        request.onerror = (e) => reject(e);
+                        request.onsuccess = (e) => {
+                            this.db = e.target.result;
+                            resolve();
+                        };
+                        
+                        request.onupgradeneeded = (e) => {
+                            const db = e.target.result;
+                            if (!db.objectStoreNames.contains('streams')) {
+                                const store = db.createObjectStore('streams', { keyPath: 'id' });
+                                store.createIndex('categoryId', 'categoryId', { unique: false });
+                            }
+                            if (!db.objectStoreNames.contains('categories')) {
+                                db.createObjectStore('categories', { keyPath: 'id' });
+                            }
+                            if (!db.objectStoreNames.contains('epg_sources')) {
+                                db.createObjectStore('epg_sources', { keyPath: 'id' });
+                            }
+                            if (!db.objectStoreNames.contains('epg_cache')) {
+                                db.createObjectStore('epg_cache', { keyPath: 'cache_id', autoIncrement: true });
+                            }
+                        };
+                    });
+                },
+
+                async _tx(storeName, mode, callback) {
+                    return new Promise((resolve, reject) => {
+                        const tx = this.db.transaction(storeName, mode);
+                        const store = tx.objectStore(storeName);
+                        let result;
+                        
+                        tx.oncomplete = () => resolve(result);
+                        tx.onerror = (e) => reject(e);
+                        
+                        const req = callback(store);
+                        if (req) {
+                            req.onsuccess = (e) => { result = e.target.result; };
+                        }
+                    });
+                },
+
+                async bulkPutStreams(streams) {
+                    return new Promise((resolve, reject) => {
+                        const tx = this.db.transaction('streams', 'readwrite');
+                        const store = tx.objectStore('streams');
+                        streams.forEach(s => store.put(s));
+                        tx.oncomplete = () => resolve();
+                        tx.onerror = reject;
+                    });
+                },
+
+                async getAllStreams() { return this._tx('streams', 'readonly', store => store.getAll()); },
+                async putCategory(cat) { return this._tx('categories', 'readwrite', store => store.put(cat)); },
+                async getAllCategories() { return this._tx('categories', 'readonly', store => store.getAll()); },
+                
+                async putEpgSource(source) { return this._tx('epg_sources', 'readwrite', store => store.put(source)); },
+                async getAllEpgSources() { return this._tx('epg_sources', 'readonly', store => store.getAll()); },
+                async deleteEpgSource(id) { return this._tx('epg_sources', 'readwrite', store => store.delete(id)); },
+
+                async replaceEpgCache(cacheArray) {
+                    await this._tx('epg_cache', 'readwrite', store => store.clear());
+                    return new Promise((resolve, reject) => {
+                        const tx = this.db.transaction('epg_cache', 'readwrite');
+                        const store = tx.objectStore('epg_cache');
+                        cacheArray.forEach(item => store.put(item));
+                        tx.oncomplete = () => resolve();
+                        tx.onerror = reject;
+                    });
+                },
+                
+                async getEpgCache() { return this._tx('epg_cache', 'readonly', store => store.getAll()); },
+
+                async clearAll() {
+                    await this._tx('streams', 'readwrite', store => store.clear());
+                    await this._tx('categories', 'readwrite', store => store.clear());
+                    await this._tx('epg_sources', 'readwrite', store => store.clear());
+                    await this._tx('epg_cache', 'readwrite', store => store.clear());
+                    App.UI.showToast('Database wiped successfully', 'success');
+                    setTimeout(() => location.reload(), 1000);
+                }
+            },
+
+            // --- UI & Routing ---
+            UI: {
+                showLoading(msg = 'Processing...') {
+                    document.getElementById('overlay_text').innerText = msg;
+                    document.getElementById('global_overlay').classList.remove('hidden');
+                    document.getElementById('global_overlay').classList.add('flex');
+                },
+                
+                hideLoading() {
+                    document.getElementById('global_overlay').classList.add('hidden');
+                    document.getElementById('global_overlay').classList.remove('flex');
+                },
+
+                showToast(msg, type = 'info') {
+                    const toast = document.getElementById('toast');
+                    const icon = document.getElementById('toast_icon');
+                    document.getElementById('toast_msg').innerText = msg;
+                    
+                    toast.className = 'fixed bottom-4 right-4 border text-white px-6 py-3 rounded-lg shadow-2xl transition-all duration-300 z-50 flex items-center';
+                    
+                    if (type === 'success') {
+                        toast.classList.add('bg-green-800', 'border-green-700');
+                        icon.className = 'fa-solid fa-circle-check mr-3 text-green-400';
+                    } else if (type === 'error') {
+                        toast.classList.add('bg-red-800', 'border-red-700');
+                        icon.className = 'fa-solid fa-triangle-exclamation mr-3 text-red-400';
+                    } else {
+                        toast.classList.add('bg-gray-800', 'border-gray-700');
+                        icon.className = 'fa-solid fa-info-circle mr-3 text-brand-400';
+                    }
+
+                    toast.classList.remove('translate-y-20', 'opacity-0');
+                    setTimeout(() => {
+                        toast.classList.add('translate-y-20', 'opacity-0');
+                    }, 3000);
+                },
+
+                switchImportTab(tab) {
+                    if (tab === 'm3u') {
+                        document.getElementById('import_m3u').classList.remove('hidden');
+                        document.getElementById('import_xtream').classList.add('hidden');
+                        document.getElementById('tab_btn_m3u').classList.replace('text-gray-400', 'text-white');
+                        document.getElementById('tab_btn_m3u').classList.replace('hover:text-white', 'bg-gray-800');
+                        document.getElementById('tab_btn_m3u').classList.add('shadow');
+                        
+                        document.getElementById('tab_btn_xtream').classList.replace('text-white', 'text-gray-400');
+                        document.getElementById('tab_btn_xtream').classList.replace('bg-gray-800', 'hover:text-white');
+                        document.getElementById('tab_btn_xtream').classList.remove('shadow');
+                    } else {
+                        document.getElementById('import_xtream').classList.remove('hidden');
+                        document.getElementById('import_m3u').classList.add('hidden');
+                        document.getElementById('tab_btn_xtream').classList.replace('text-gray-400', 'text-white');
+                        document.getElementById('tab_btn_xtream').classList.replace('hover:text-white', 'bg-gray-800');
+                        document.getElementById('tab_btn_xtream').classList.add('shadow');
+                        
+                        document.getElementById('tab_btn_m3u').classList.replace('text-white', 'text-gray-400');
+                        document.getElementById('tab_btn_m3u').classList.replace('bg-gray-800', 'hover:text-white');
+                        document.getElementById('tab_btn_m3u').classList.remove('shadow');
+                    }
+                },
+
+                updateDashboard() {
+                    document.getElementById('dash_total_streams').innerText = App.state.streams.length.toLocaleString();
+                    document.getElementById('dash_total_cats').innerText = App.state.categories.length.toLocaleString();
+                    document.getElementById('dash_total_epg').innerText = App.state.epgSources.length.toLocaleString();
+                }
+            },
+
+            navigate(viewId) {
+                document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+                document.querySelectorAll('.nav-btn').forEach(el => {
+                    el.classList.remove('bg-gray-800', 'text-white', 'border-r-4', 'border-brand-500');
+                    el.classList.add('text-gray-400');
+                });
+                
+                const viewEl = document.getElementById(`view_${viewId}`);
+                if (viewEl) viewEl.classList.remove('hidden');
+                
+                const navBtn = document.querySelector(`.nav-btn[data-view="${viewId}"]`);
+                if (navBtn) {
+                    navBtn.classList.add('bg-gray-800', 'text-white', 'border-r-4', 'border-brand-500');
+                    navBtn.classList.remove('text-gray-400');
+                }
+
+                const titles = {
+                    'dashboard': 'Dashboard',
+                    'import': 'Import Playlist',
+                    'basic_editor': 'Edit Channels',
+                    'category_editor': 'Edit Categories',
+                    'advanced_editor': 'Bulk Edit',
+                    'epg_editor': 'Manage EPG',
+                    'export': 'Export Playlist'
+                };
+                document.getElementById('pageTitle').innerText = titles[viewId] || 'Editor';
+
+                if (viewId === 'dashboard') App.UI.updateDashboard();
+                if (viewId === 'basic_editor') App.Editor.init();
+                if (viewId === 'category_editor') App.CategoryEngine.init();
+                if (viewId === 'epg_editor') App.EPG.init();
+            },
+
+            // --- STREAMING_CHUNK:Implementing Data Ingestion Protocols... ---
+            Ingest: {
+                generateId() {
+                    return Math.random().toString(36).substring(2, 15);
+                },
+
+                async processM3U() {
+                    const fileInput = document.getElementById('m3u_file');
+                    const urlInput = document.getElementById('m3u_url').value;
+                    const ignoreNums = document.getElementById('m3u_ignore_nums').checked;
+
+                    if (!fileInput.files[0] && !urlInput) {
+                        App.UI.showToast('Provide a file or URL', 'error');
+                        return;
+                    }
+
+                    App.UI.showLoading('Reading payload...');
+                    
+                    let content = '';
+                    try {
+                        if (fileInput.files[0]) {
+                            content = await fileInput.files[0].text();
+                        } else {
+                            const res = await fetch(urlInput);
+                            content = await res.text();
+                        }
+                    } catch (e) {
+                        App.UI.hideLoading();
+                        App.UI.showToast('Failed to fetch data (CORS or network error)', 'error');
+                        return;
+                    }
+
+                    App.UI.showLoading('Parsing M3U schema via Web Worker...');
+                    
+                    const workerCode = `
+                        self.onmessage = function(e) {
+                            const { content, ignoreNums } = e.data;
+                            const lines = content.split('\\n');
+                            const streams = [];
+                            const categories = new Set();
+                            let currentMeta = null;
+
+                            for(let i=0; i < lines.length; i++) {
+                                const line = lines[i].trim();
+                                if(line.startsWith('#EXTINF:')) {
+                                    currentMeta = line;
+                                } else if(line && !line.startsWith('#')) {
+                                    if(currentMeta) {
+                                        let catMatch = currentMeta.match(/group-title="([^"]*)"/i);
+                                        let cat = catMatch ? catMatch[1] : 'Uncategorized';
+                                        categories.add(cat);
+                                        
+                                        let logoMatch = currentMeta.match(/tvg-logo="([^"]*)"/i);
+                                        let logo = logoMatch ? logoMatch[1] : '';
+
+                                        let tvgIdMatch = currentMeta.match(/tvg-id="([^"]*)"/i);
+                                        let tvgId = tvgIdMatch ? tvgIdMatch[1] : '';
+
+                                        let name = currentMeta.split(',').pop().trim();
+                                        
+                                        if (ignoreNums) {
+                                            name = name.replace(/^\\d+\\s*[:\\-]?\\s*/, '');
+                                        }
+
+                                        streams.push({
+                                            id: Math.random().toString(36).substring(2, 15),
+                                            original_name: name,
+                                            custom_name: name,
+                                            category_name: cat,
+                                            stream_url: line,
+                                            logo_url: logo,
+                                            tvg_id: tvgId,
+                                            sync_name: false
+                                        });
+                                        currentMeta = null;
+                                    }
+                                }
+                            }
+                            self.postMessage({ streams, categories: Array.from(categories) });
+                        };
+                    `;
+                    const blob = new Blob([workerCode], {type: 'application/javascript'});
+                    const worker = new Worker(URL.createObjectURL(blob));
+
+                    worker.onmessage = async (e) => {
+                        const { streams, categories } = e.data;
+                        App.UI.showLoading('Committing to IndexedDB...');
+                        
+                        const catMap = {};
+                        for (const catName of categories) {
+                            const cid = App.Ingest.generateId();
+                            catMap[catName] = cid;
+                            await App.DB.putCategory({ id: cid, name: catName, type: 'live' });
+                        }
+
+                        streams.forEach(s => { s.categoryId = catMap[s.category_name]; });
+
+                        await App.DB.bulkPutStreams(streams);
+                        await App.initData(); 
+                        
+                        worker.terminate();
+                        App.UI.hideLoading();
+                        App.UI.showToast(`Imported ${streams.length} streams successfully`, 'success');
+                        App.navigate('dashboard');
+                    };
+
+                    worker.postMessage({ content, ignoreNums });
+                },
+
+                async processXtream() {
+                    let baseUrl = document.getElementById('xc_url').value.trim();
+                    const user = document.getElementById('xc_user').value.trim();
+                    const pass = document.getElementById('xc_pass').value.trim();
+
+                    if (!baseUrl || !user || !pass) {
+                        return App.UI.showToast('Please fill in all Xtream fields.', 'error');
+                    }
+
+                    if (!baseUrl.startsWith('http')) baseUrl = 'http://' + baseUrl;
+
+                    const cleanUrl = baseUrl.replace(/\/+$/, "");
+                    const targetAuthUrl = `${cleanUrl}/player_api.php?username=${user}&password=${pass}`;
+
+                    App.UI.showLoading('Authenticating with Xtream Server directly...');
+                    
+                    try {
+                        // 1. Test Auth
+                        const authRes = await fetch(targetAuthUrl);
+                        const authData = await authRes.json();
+
+                        if (authData.user_info && authData.user_info.auth === 0) {
+                            App.UI.hideLoading();
+                            return App.UI.showToast('Authentication failed. Check your username and password.', 'error');
+                        }
+
+                        // 2. Fetch Categories
+                        App.UI.showLoading('Fetching Categories...');
+                        const targetCatUrl = `${targetAuthUrl}&action=get_live_categories`;
+                        const catRes = await fetch(targetCatUrl);
+                        const catData = await catRes.json();
+
+                        // 3. Fetch Streams
+                        App.UI.showLoading('Fetching Live Streams...');
+                        const targetStreamUrl = `${targetAuthUrl}&action=get_live_streams`;
+                        const streamRes = await fetch(targetStreamUrl);
+                        const streamData = await streamRes.json();
+
+                        App.UI.showLoading('Processing & Saving Data to Database...');
+
+                        const catMap = {}; 
+                        
+                        for (const cat of catData) {
+                            const cid = App.Ingest.generateId();
+                            catMap[cat.category_id] = cid;
+                            await App.DB.putCategory({ id: cid, name: cat.category_name, type: 'live' });
+                        }
+
+                        const streams = [];
+                        for (const stream of streamData) {
+                            let catId = catMap[stream.category_id];
+                            if (!catId) {
+                                if (!catMap['uncat']) {
+                                    catMap['uncat'] = App.Ingest.generateId();
+                                    await App.DB.putCategory({ id: catMap['uncat'], name: 'Uncategorized', type: 'live' });
+                                }
+                                catId = catMap['uncat'];
+                            }
+
+                            streams.push({
+                                id: Math.random().toString(36).substring(2, 15),
+                                original_name: stream.name,
+                                custom_name: stream.name,
+                                category_name: "", 
+                                categoryId: catId,
+                                stream_url: `${cleanUrl}/live/${user}/${pass}/${stream.stream_id}.ts`, 
+                                logo_url: stream.stream_icon || '',
+                                tvg_id: stream.epg_channel_id || '',
+                                sync_name: false
+                            });
+                        }
+
+                        await App.DB.bulkPutStreams(streams);
+                        await App.initData(); 
+
+                        App.UI.hideLoading();
+                        App.UI.showToast(`Imported ${streams.length} streams successfully via Xtream`, 'success');
+                        App.navigate('dashboard');
+
+                    } catch (error) {
+                        App.UI.hideLoading();
+                        console.error("Xtream Fetch Error:", error);
+                        App.UI.showToast('Failed to connect. Did you turn on the Allow CORS extension?', 'error');
+                    }
+                }
+            },
+
+            Editor: {
+                init() {
+                    const catSelect = document.getElementById('editor_category_filter');
+                    catSelect.innerHTML = '<option value="all">All Categories</option>';
+                    App.state.categories.forEach(c => {
+                        catSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+                    });
+                    this.filterData();
+                },
+
+                filterData() {
+                    const catId = document.getElementById('editor_category_filter').value;
+                    const search = document.getElementById('editor_search').value.toLowerCase();
+                    
+                    App.state.filteredStreams = App.state.streams.filter(s => {
+                        const matchCat = catId === 'all' || s.categoryId === catId;
+                        const matchSearch = s.custom_name.toLowerCase().includes(search);
+                        return matchCat && matchSearch;
+                    });
+                    
+                    App.state.currentPage = 1;
+                    this.renderTable();
+                },
+
+                debounceTimer: null,
+                debounceSearch() {
+                    clearTimeout(this.debounceTimer);
+                    this.debounceTimer = setTimeout(() => this.filterData(), 300);
+                },
+
+                renderTable() {
+                    const tbody = document.getElementById('editor_tbody');
+                    tbody.innerHTML = '';
+                    
+                    const start = (App.state.currentPage - 1) * App.state.itemsPerPage;
+                    const end = start + App.state.itemsPerPage;
+                    const pageData = App.state.filteredStreams.slice(start, end);
+                    
+                    const catLookup = {};
+                    App.state.categories.forEach(c => catLookup[c.id] = c.name);
+
+                    pageData.forEach((stream, index) => {
+                        const isSelected = App.state.editorSelection.has(stream.id);
+                        const globalIndex = start + index;
+                        
+                        const tr = document.createElement('tr');
+                        tr.className = `border-b border-gray-800 hover:bg-gray-800 cursor-pointer transition-colors ${isSelected ? 'selected-row' : ''}`;
+                        tr.dataset.id = stream.id;
+                        tr.dataset.index = globalIndex;
+                        
+                        tr.onclick = (e) => {
+                            if(e.target.tagName === 'INPUT' && e.target.type !== 'checkbox') return;
+                            if(e.target.tagName === 'CHECKBOX') {
+                                this.handleSelection(stream.id, e.target.checked, globalIndex, e.shiftKey);
+                                return;
+                            }
+                            
+                            const checkbox = tr.querySelector('.row-checkbox');
+                            checkbox.checked = !checkbox.checked;
+                            this.handleSelection(stream.id, checkbox.checked, globalIndex, e.shiftKey);
+                        };
+
+                        tr.innerHTML = `
+                            <td class="px-4 py-3">
+                                <input type="checkbox" class="row-checkbox rounded border-gray-700 text-brand-500 bg-gray-800 focus:ring-brand-500" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); App.Editor.handleSelection('${stream.id}', this.checked, ${globalIndex}, event.shiftKey)">
+                            </td>
+                            <td class="px-4 py-3">
+                                ${stream.logo_url ? `<img src="${stream.logo_url}" class="w-8 h-8 object-contain bg-black rounded" onerror="this.style.display='none'">` : '<div class="w-8 h-8 bg-gray-800 rounded"></div>'}
+                            </td>
+                            <td class="px-4 py-3 font-medium text-white">
+                                <input type="text" value="${this.escapeHtml(stream.custom_name)}" onchange="App.Editor.updateName('${stream.id}', this.value)" class="bg-transparent border-b border-transparent hover:border-gray-600 focus:border-brand-500 focus:outline-none w-full px-1 py-0.5">
+                            </td>
+                            <td class="px-4 py-3 text-gray-400">
+                                ${this.escapeHtml(catLookup[stream.categoryId] || 'Unknown')}
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <input type="checkbox" ${stream.sync_name ? 'checked' : ''} onchange="App.Editor.toggleSync('${stream.id}', this.checked)" class="rounded border-gray-700 text-brand-500 bg-gray-800 focus:ring-brand-500">
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+
+                    document.getElementById('editor_pagination_info').innerText = 
+                        `Showing ${App.state.filteredStreams.length === 0 ? 0 : start + 1} to ${Math.min(end, App.state.filteredStreams.length)} of ${App.state.filteredStreams.length} entries`;
+                },
+
+                handleSelection(id, isChecked, index, isShift) {
+                    if (isShift && App.state.lastSelectedRowIndex !== null) {
+                        const startIdx = Math.min(index, App.state.lastSelectedRowIndex);
+                        const endIdx = Math.max(index, App.state.lastSelectedRowIndex);
+                        
+                        for (let i = startIdx; i <= endIdx; i++) {
+                            const sId = App.state.filteredStreams[i].id;
+                            if (isChecked) App.state.editorSelection.add(sId);
+                            else App.state.editorSelection.delete(sId);
+                        }
+                    } else {
+                        if (isChecked) App.state.editorSelection.add(id);
+                        else App.state.editorSelection.delete(id);
+                        App.state.lastSelectedRowIndex = index;
+                    }
+                    this.renderTable(); 
+                },
+
+                toggleSelectAll() {
+                    const chk = document.getElementById('selectAllCheckbox').checked;
+                    if (chk) {
+                        const start = (App.state.currentPage - 1) * App.state.itemsPerPage;
+                        const end = start + App.state.itemsPerPage;
+                        App.state.filteredStreams.slice(start, end).forEach(s => App.state.editorSelection.add(s.id));
+                    } else {
+                        App.state.editorSelection.clear();
+                    }
+                    this.renderTable();
+                },
+
+                async updateName(id, newName) {
+                    const stream = App.state.streams.find(s => s.id === id);
+                    if (stream) {
+                        stream.custom_name = newName;
+                        await App.DB.bulkPutStreams([stream]); 
+                    }
+                },
+
+                async toggleSync(id, state) {
+                    const stream = App.state.streams.find(s => s.id === id);
+                    if (stream) {
+                        stream.sync_name = state;
+                        await App.DB.bulkPutStreams([stream]);
+                    }
+                },
+
+                async deleteSelected() {
+                    if (App.state.editorSelection.size === 0) return;
+                    if (!confirm(`Delete ${App.state.editorSelection.size} streams?`)) return;
+                    
+                    App.UI.showLoading('Deleting...');
+                    
+                    App.state.streams = App.state.streams.filter(s => !App.state.editorSelection.has(s.id));
+                    
+                    await App.DB._tx('streams', 'readwrite', store => store.clear());
+                    await App.DB.bulkPutStreams(App.state.streams);
+                    
+                    App.state.editorSelection.clear();
+                    this.filterData();
+                    App.UI.hideLoading();
+                    App.UI.showToast('Streams deleted', 'success');
+                },
+
+                prevPage() {
+                    if (App.state.currentPage > 1) {
+                        App.state.currentPage--;
+                        this.renderTable();
+                    }
+                },
+
+                nextPage() {
+                    const maxPage = Math.ceil(App.state.filteredStreams.length / App.state.itemsPerPage);
+                    if (App.state.currentPage < maxPage) {
+                        App.state.currentPage++;
+                        this.renderTable();
+                    }
+                },
+
+                escapeHtml(unsafe) {
+                    return (unsafe || '').toString()
+                         .replace(/&/g, "&amp;")
+                         .replace(/</g, "&lt;")
+                         .replace(/>/g, "&gt;")
+                         .replace(/"/g, "&quot;")
+                         .replace(/'/g, "&#039;");
+                }
+            },
+
+            // --- Category Management ---
+            CategoryEngine: {
+                init() {
+                    this.renderList();
+                    this.populateMergeDropdowns();
+                },
+
+                renderList() {
+                    const container = document.getElementById('category_list_container');
+                    container.innerHTML = '';
+                    
+                    const counts = {};
+                    App.state.streams.forEach(s => {
+                        counts[s.categoryId] = (counts[s.categoryId] || 0) + 1;
+                    });
+
+                    App.state.categories.forEach(cat => {
+                        const div = document.createElement('div');
+                        div.className = 'flex justify-between items-center p-3 mb-2 bg-gray-850 border border-gray-700 rounded-lg hover:border-gray-600 transition-colors';
+                        div.innerHTML = `
+                            <div class="flex items-center space-x-3">
+                                <i class="fa-solid fa-grip-vertical text-gray-500 cursor-move"></i>
+                                <span class="font-medium text-white">${App.Editor.escapeHtml(cat.name)}</span>
+                            </div>
+                            <div class="flex items-center space-x-4">
+                                <span class="text-xs font-semibold px-2 py-1 bg-gray-900 text-gray-400 rounded-full border border-gray-700">${counts[cat.id] || 0} Streams</span>
+                                <button onclick="App.CategoryEngine.deleteCategory('${cat.id}')" class="text-gray-500 hover:text-red-500 transition-colors"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        `;
+                        container.appendChild(div);
+                    });
+                },
+
+                populateMergeDropdowns() {
+                    const source = document.getElementById('merge_source_cat');
+                    const target = document.getElementById('merge_target_cat');
+                    let options = '<option value="" disabled selected>Select Category...</option>';
+                    
+                    App.state.categories.forEach(c => {
+                        options += `<option value="${c.id}">${c.name}</option>`;
+                    });
+                    
+                    source.innerHTML = options;
+                    target.innerHTML = options;
+                },
+
+                async createCategory() {
+                    const nameInput = document.getElementById('new_cat_name');
+                    const name = nameInput.value.trim();
+                    if (!name) return;
+                    
+                    const newCat = { id: App.Ingest.generateId(), name: name, type: 'custom' };
+                    App.state.categories.push(newCat);
+                    await App.DB.putCategory(newCat);
+                    
+                    nameInput.value = '';
+                    this.init();
+                    App.UI.showToast('Category created', 'success');
+                },
+
+                async executeMerge() {
+                    const srcId = document.getElementById('merge_source_cat').value;
+                    const tgtId = document.getElementById('merge_target_cat').value;
+                    
+                    if (!srcId || !tgtId || srcId === tgtId) {
+                        App.UI.showToast('Invalid selection', 'error');
+                        return;
+                    }
+
+                    App.UI.showLoading('Merging Categories...');
+                    
+                    const updatedStreams = [];
+                    App.state.streams.forEach(s => {
+                        if (s.categoryId === srcId) {
+                            s.categoryId = tgtId;
+                            updatedStreams.push(s);
+                        }
+                    });
+
+                    await App.DB.bulkPutStreams(updatedStreams);
+                    await App.DB._tx('categories', 'readwrite', store => store.delete(srcId));
+                    App.state.categories = App.state.categories.filter(c => c.id !== srcId);
+
+                    this.init();
+                    App.UI.hideLoading();
+                    App.UI.showToast('Merge complete', 'success');
+                },
+                
+                async deleteCategory(id) {
+                     if (!confirm('Delete category? Streams within will be orphaned unless merged first.')) return;
+                     await App.DB._tx('categories', 'readwrite', store => store.delete(id));
+                     App.state.categories = App.state.categories.filter(c => c.id !== id);
+                     this.init();
+                     App.UI.showToast('Category Deleted', 'info');
+                }
+            },
+
+            // --- STREAMING_CHUNK:Configuring Advanced Bulk Actions... ---
+            Advanced: {
+                async autoOptimize() {
+                    if (App.state.streams.length === 0) return;
+                    App.UI.showLoading('Running Regex Optimizer...');
+                    
+                    let updated = 0;
+                    App.state.streams.forEach(s => {
+                        let original = s.custom_name;
+                        let clean = s.custom_name
+                            .replace(/\[[A-Z]{2,4}\]/gi, '') 
+                            .replace(/^[A-Z]{2,3}:/i, '')    
+                            .replace(/\(1080p\)|\(720p\)|FHD|HD/gi, '') 
+                            .replace(/\s{2,}/g, ' ')         
+                            .trim();
+                            
+                        if (original !== clean) {
+                            s.custom_name = clean;
+                            updated++;
+                        }
+                    });
+
+                    if (updated > 0) {
+                        await App.DB.bulkPutStreams(App.state.streams);
+                    }
+                    
+                    App.UI.hideLoading();
+                    App.UI.showToast(`Optimized ${updated} channel names`, 'success');
+                },
+
+                async searchAndReplace() {
+                    const search = document.getElementById('adv_search_str').value;
+                    const replace = document.getElementById('adv_replace_str').value;
+                    if (!search) return;
+
+                    App.UI.showLoading('Replacing...');
+                    let updated = 0;
+                    
+                    App.state.streams.forEach(s => {
+                        if (s.custom_name.includes(search)) {
+                            s.custom_name = s.custom_name.split(search).join(replace).trim();
+                            updated++;
+                        }
+                    });
+
+                    if (updated > 0) await App.DB.bulkPutStreams(App.state.streams);
+                    
+                    App.UI.hideLoading();
+                    App.UI.showToast(`Updated ${updated} entries`, 'success');
+                },
+
+                async deduplicate() {
+                    App.UI.showLoading('Analyzing for duplicates...');
+                    
+                    const seenUrls = new Set();
+                    const toKeep = [];
+                    let removed = 0;
+
+                    App.state.streams.forEach(s => {
+                        if (!seenUrls.has(s.stream_url)) {
+                            seenUrls.add(s.stream_url);
+                            toKeep.push(s);
+                        } else {
+                            removed++;
+                        }
+                    });
+
+                    if (removed > 0) {
+                        App.state.streams = toKeep;
+                        await App.DB._tx('streams', 'readwrite', store => store.clear());
+                        await App.DB.bulkPutStreams(toKeep);
+                    }
+
+                    App.UI.hideLoading();
+                    App.UI.showToast(`Removed ${removed} duplicate streams`, 'success');
+                }
+            },
+
+            // --- Multi-Source Dynamic EPG Management ---
+            EPG: {
+                init() {
+                    this.renderSources();
+                },
+
+                toggleFields() {
+                    const type = document.getElementById('epg_source_type').value;
+                    document.getElementById('epg_field_url').classList.add('hidden');
+                    document.getElementById('epg_field_sheet').classList.add('hidden');
+                    document.getElementById('epg_field_dummy').classList.add('hidden');
+
+                    if (type === 'url') document.getElementById('epg_field_url').classList.remove('hidden');
+                    if (type === 'sheet') document.getElementById('epg_field_sheet').classList.remove('hidden');
+                    if (type === 'dummy') document.getElementById('epg_field_dummy').classList.remove('hidden');
+                },
+
+                showSampleModal() {
+                    document.getElementById('modal_sample_epg').classList.remove('hidden');
+                    document.getElementById('modal_sample_epg').classList.add('flex');
+                },
+
+                async addSource() {
+                    const name = document.getElementById('epg_source_name').value.trim() || 'Unnamed Source';
+                    const type = document.getElementById('epg_source_type').value;
+                    
+                    const source = {
+                        id: App.Ingest.generateId(),
+                        name: name,
+                        type: type,
+                        url: '',
+                        sheetName: '',
+                        dummyDuration: 24,
+                        dummyImg: '',
+                        lastSync: null
+                    };
+
+                    if (type === 'url') {
+                        source.url = document.getElementById('epg_input_url').value.trim();
+                        if (!source.url) return App.UI.showToast('URL is required', 'error');
+                    } else if (type === 'sheet') {
+                        source.url = document.getElementById('epg_input_sheet_url').value.trim();
+                        source.sheetName = document.getElementById('epg_input_sheet_name').value.trim();
+                        if (!source.url) return App.UI.showToast('Google Sheet CSV URL is required', 'error');
+                    } else if (type === 'dummy') {
+                        source.dummyDuration = parseInt(document.getElementById('epg_input_dummy_duration').value) || 24;
+                        source.dummyImg = document.getElementById('epg_input_dummy_img').value.trim();
+                    }
+
+                    App.state.epgSources.push(source);
+                    await App.DB.putEpgSource(source);
+                    
+                    document.getElementById('epg_source_name').value = '';
+                    document.getElementById('epg_input_url').value = '';
+                    document.getElementById('epg_input_sheet_url').value = '';
+                    document.getElementById('epg_input_sheet_name').value = '';
+                    
+                    this.renderSources();
+                    App.UI.showToast('EPG Source Added', 'success');
+                },
+
+                async deleteSource(id) {
+                    if (!confirm('Remove this EPG source?')) return;
+                    await App.DB.deleteEpgSource(id);
+                    App.state.epgSources = App.state.epgSources.filter(s => s.id !== id);
+                    this.renderSources();
+                },
+                
+                formatDateForInternalUse(dStr, fallbackHoursAdd = 0) {
+                    let d = new Date(dStr);
+                    if (isNaN(d.getTime())) {
+                        d = new Date();
+                        d.setHours(d.getHours() + fallbackHoursAdd);
+                    }
+                    return d;
+                },
+
+                async syncSource(id) {
+                    const source = App.state.epgSources.find(s => s.id === id);
+                    if (!source) return;
+
+                    App.UI.showLoading(`Syncing ${source.name}...`);
+                    
+                    let newEvents = [];
+
+                    if (source.type === 'dummy') {
+                        let generated = 0;
+                        const start = new Date();
+                        const end = new Date();
+                        end.setHours(end.getHours() + source.dummyDuration);
+
+                        App.state.streams.forEach(s => {
+                            if (s.sync_name) {
+                                newEvents.push({
+                                    channel: s.custom_name,
+                                    title: s.custom_name,
+                                    desc: `Live Broadcast: ${s.custom_name}`,
+                                    start: start.toISOString(),
+                                    stop: end.toISOString(),
+                                    photo: source.dummyImg
+                                });
+                                generated++;
+                            }
+                        });
+                        source.lastSync = new Date().toISOString();
+                        await App.DB.putEpgSource(source);
+                        
+                        App.state.epgCache = App.state.epgCache.concat(newEvents);
+                        await App.DB.replaceEpgCache(App.state.epgCache);
+                        
+                        App.UI.hideLoading();
+                        App.UI.showToast(`Generated dummy mapping for ${generated} channels`, 'success');
+                        this.renderSources();
+                        return;
+                    }
+
+                    if (source.type === 'sheet') {
+                        try {
+                            const res = await fetch(source.url);
+                            const csv = await res.text();
+                            
+                            const lines = csv.split('\n');
+                            let mappings = 0;
+                            
+                            for (let i = 1; i < lines.length; i++) { 
+                                const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+                                if (cols.length >= 4) {
+                                    const c_chan = cols[0];
+                                    const c_start = this.formatDateForInternalUse(cols[1], 0);
+                                    const c_end = this.formatDateForInternalUse(cols[2], 2);
+                                    const c_title = cols[3];
+                                    const c_desc = cols[4] || '';
+                                    const c_photo = cols[5] || '';
+                                    
+                                    newEvents.push({
+                                        channel: c_chan,
+                                        start: c_start.toISOString(),
+                                        stop: c_end.toISOString(),
+                                        title: c_title,
+                                        desc: c_desc,
+                                        photo: c_photo
+                                    });
+                                    mappings++;
+                                }
+                            }
+                            
+                            source.lastSync = new Date().toISOString();
+                            await App.DB.putEpgSource(source);
+                            
+                            App.state.epgCache = App.state.epgCache.concat(newEvents);
+                            await App.DB.replaceEpgCache(App.state.epgCache);
+                            
+                            App.UI.hideLoading();
+                            App.UI.showToast(`Cached ${mappings} EPG events`, 'success');
+                            this.renderSources();
+                        } catch(e) {
+                            App.UI.hideLoading();
+                            App.UI.showToast('Failed to fetch Google Sheet.', 'error');
+                        }
+                        return;
+                    }
+                },
+
+                renderSources() {
+                    const list = document.getElementById('epg_source_list');
+                    list.innerHTML = '';
+                    
+                    if (App.state.epgSources.length === 0) {
+                        list.innerHTML = '<div class="text-sm text-gray-500 italic p-4 text-center border border-dashed border-gray-800 rounded-lg">No EPG sources added yet.</div>';
+                        return;
+                    }
+
+                    App.state.epgSources.forEach(src => {
+                        let icon = 'fa-link';
+                        let typeBadge = 'XMLTV URL';
+                        let actionBtn = '';
+                        let details = src.url;
+
+                        if (src.type === 'sheet') {
+                            icon = 'fa-file-csv';
+                            typeBadge = 'Google Sheet';
+                            details = src.sheetName ? `Tab: ${src.sheetName} <br><span class="text-xs text-gray-600">${src.url.substring(0, 30)}...</span>` : `${src.url.substring(0, 30)}...`;
+                            actionBtn = `<button onclick="App.EPG.syncSource('${src.id}')" class="px-3 py-1 bg-brand-600 hover:bg-brand-500 rounded text-xs font-medium text-white transition-colors mr-2">Sync Data</button>`;
+                        } else if (src.type === 'dummy') {
+                            icon = 'fa-clock';
+                            typeBadge = 'Dummy Generator';
+                            details = `Duration: ${src.dummyDuration}h | Image: ${src.dummyImg ? 'Yes' : 'No'}`;
+                            actionBtn = `<button onclick="App.EPG.syncSource('${src.id}')" class="px-3 py-1 bg-brand-600 hover:bg-brand-500 rounded text-xs font-medium text-white transition-colors mr-2">Generate Now</button>`;
+                        }
+
+                        let lastSyncStr = src.lastSync ? new Date(src.lastSync).toLocaleString() : 'Never';
+                        if (src.type === 'url') lastSyncStr = 'N/A (Appended on Export)';
+
+                        list.innerHTML += `
+                            <div class="bg-gray-850 border border-gray-700 rounded-lg p-4 flex justify-between items-center hover:border-gray-600 transition-colors">
+                                <div class="flex items-start space-x-4">
+                                    <div class="mt-1 bg-gray-900 p-2 rounded-lg text-gray-400">
+                                        <i class="fa-solid ${icon} text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-white font-medium flex items-center">
+                                            ${App.Editor.escapeHtml(src.name)}
+                                            <span class="ml-3 px-2 py-0.5 bg-gray-900 border border-gray-700 rounded text-[10px] text-gray-400 uppercase tracking-wider">${typeBadge}</span>
+                                        </h4>
+                                        <p class="text-xs text-gray-400 mt-1">${details}</p>
+                                        <p class="text-[11px] text-gray-500 mt-2"><i class="fa-solid fa-clock-rotate-left mr-1"></i> Last Sync: ${lastSyncStr}</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center">
+                                    ${actionBtn}
+                                    <button onclick="App.EPG.deleteSource('${src.id}')" class="p-2 text-gray-500 hover:text-red-500 transition-colors"><i class="fa-solid fa-trash"></i></button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+            },
+
+            // --- STREAMING_CHUNK:Configuring Compilation & Export Logic... ---
+            Export: {
+                generateM3U() {
+                    App.UI.showLoading('Compiling M3U format...');
+                    
+                    setTimeout(() => {
+                        let output = "#EXTM3U";
+                        
+                        const urlSources = App.state.epgSources.filter(s => s.type === 'url').map(s => s.url);
+                        if (urlSources.length > 0) {
+                            output += ` url-tvg="${urlSources.join(',')}"`;
+                        }
+                        output += "\n";
+                        
+                        const catLookup = {};
+                        App.state.categories.forEach(c => catLookup[c.id] = c.name);
+
+                        App.state.streams.forEach(s => {
+                            const catName = catLookup[s.categoryId] || 'Uncategorized';
+                            
+                            const cachedEvent = App.state.epgCache.find(e => e.channel === s.custom_name);
+                            let displayName = s.custom_name;
+                            let tvgId = s.tvg_id || '';
+                            
+                            if (cachedEvent) {
+                                tvgId = s.id; 
+                            }
+
+                            let extinf = `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${s.custom_name}" tvg-logo="${s.logo_url || ''}" group-title="${catName}",${displayName}\n`;
+                            
+                            output += extinf;
+                            output += `${s.stream_url}\n`;
+                        });
+
+                        const blob = new Blob([output], { type: 'audio/x-mpegurl' });
+                        const url = URL.createObjectURL(blob);
+                        
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'playlist_streamforge.m3u';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        
+                        App.UI.hideLoading();
+                        App.UI.showToast('M3U Export successful', 'success');
+                    }, 500);
+                },
+
+                formatXMLTVDate(isoString) {
+                    const d = new Date(isoString);
+                    const pad = n => n.toString().padStart(2, '0');
+                    return `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00 +0000`;
+                },
+
+                generateXMLTV() {
+                    if (App.state.epgCache.length === 0) {
+                        return App.UI.showToast('No custom EPG data in cache. Sync a source first.', 'error');
+                    }
+
+                    App.UI.showLoading('Compiling Custom XMLTV...');
+
+                    setTimeout(() => {
+                        let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="StreamForge">\n`;
+                        
+                        const linkedChannels = new Set(App.state.epgCache.map(e => e.channel));
+                        
+                        App.state.streams.forEach(s => {
+                            if (linkedChannels.has(s.custom_name)) {
+                                xml += `  <channel id="${s.id}">\n`;
+                                xml += `    <display-name>${App.Editor.escapeHtml(s.custom_name)}</display-name>\n`;
+                                if (s.logo_url) xml += `    <icon src="${App.Editor.escapeHtml(s.logo_url)}" />\n`;
+                                xml += `  </channel>\n`;
+                            }
+                        });
+
+                        App.state.epgCache.forEach(event => {
+                            const streamMatch = App.state.streams.find(s => s.custom_name === event.channel);
+                            if (streamMatch) {
+                                const startFmt = this.formatXMLTVDate(event.start);
+                                const stopFmt = this.formatXMLTVDate(event.stop);
+                                
+                                xml += `  <programme start="${startFmt}" stop="${stopFmt}" channel="${streamMatch.id}">\n`;
+                                xml += `    <title>${App.Editor.escapeHtml(event.title)}</title>\n`;
+                                if (event.desc) xml += `    <desc>${App.Editor.escapeHtml(event.desc)}</desc>\n`;
+                                if (event.photo) xml += `    <icon src="${App.Editor.escapeHtml(event.photo)}" />\n`;
+                                xml += `  </programme>\n`;
+                            }
+                        });
+
+                        xml += `</tv>`;
+
+                        const blob = new Blob([xml], { type: 'application/xml' });
+                        const url = URL.createObjectURL(blob);
+                        
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'guide_streamforge.xml';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        
+                        App.UI.hideLoading();
+                        App.UI.showToast('XMLTV Guide exported successfully', 'success');
+                    }, 500);
+                }
+            },
+
+            // --- Init sequence ---
+            async initData() {
+                try {
+                    await App.DB.init();
+                    App.state.streams = await App.DB.getAllStreams();
+                    App.state.categories = await App.DB.getAllCategories();
+                    App.state.epgSources = await App.DB.getAllEpgSources() || [];
+                    App.state.epgCache = await App.DB.getEpgCache() || [];
+                    
+                    App.navigate('dashboard');
+                } catch(e) {
+                    console.error("DB Init Failed", e);
+                    App.UI.showToast('Local database initialization failed.', 'error');
+                }
+            }
+        };
+
+        // Boot
+        window.onload = () => {
+            App.initData();
+        };
+
+    </script>
+</body>
+</html>
